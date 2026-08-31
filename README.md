@@ -29,16 +29,19 @@ make install
 Open the overlay with `prefix + f`:
 
 ```tmux
-bind f display-popup -B -E -w 100% -h 100% -d "#{pane_current_path}" "$HOME/.cargo/bin/rmux-fastcopy --pane '#{pane_id}'"
+bind f run-shell -C "display-popup -B -E -x #{pane_left} -y #{pane_top} -w #{pane_width} -h #{pane_height} -d '#{pane_current_path}' '$HOME/.cargo/bin/rmux-fastcopy --pane #{pane_id}'"
 ```
 
 The default action writes the selection to an rmux buffer. On macOS, pass
 `--action pbcopy` in the popup command to copy directly to the system
 clipboard instead.
 
-The popup is only a temporary overlay. `rmux-fastcopy` reads the target with
-`capture-pane` and never swaps, resizes, splits, or otherwise changes windows,
-panes, or their layout.
+The popup is positioned over only the active pane, so the surrounding panes
+stay visible and the window does not appear to zoom before selection.
+`run-shell -C` expands the pane geometry before `display-popup` parses it,
+which is required by rmux 0.10.
+`rmux-fastcopy` reads the target with `capture-pane` and never swaps, resizes,
+splits, or otherwise changes windows, panes, or their layout.
 
 ## Use
 
