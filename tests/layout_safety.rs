@@ -30,8 +30,12 @@ fn configured_popup_expands_target_pane_geometry_before_display() {
         .expect("README must document the rmux key binding");
 
     assert!(
-        binding.starts_with("bind f run-shell -C "),
-        "rmux 0.10 does not expand pane formats in display-popup sizes directly"
+        binding.starts_with("bind f run-shell -C -t '#{pane_id}' "),
+        "run-shell must retain the pane that invoked the binding"
+    );
+    assert!(
+        binding.contains("display-popup -B -E -t #{pane_id} "),
+        "display-popup must render against the pane that invoked the binding"
     );
     for argument in [
         "-x #{pane_left}",
