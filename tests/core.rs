@@ -228,7 +228,7 @@ fn pane_geometry_parses_rmux_format_output() {
 }
 
 #[test]
-fn popup_args_pin_geometry_pane_client_and_working_directory() {
+fn popup_args_use_pane_relative_positioning() {
     let args = build_popup_args(
         "%138",
         Some("61012"),
@@ -252,9 +252,9 @@ fn popup_args_pin_geometry_pane_client_and_working_directory() {
             "-t",
             "%138",
             "-x",
-            "113",
+            "P",
             "-y",
-            "23",
+            "P",
             "-w",
             "112",
             "-h",

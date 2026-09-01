@@ -416,9 +416,12 @@ pub fn build_popup_args(
         "-t".to_owned(),
         pane.to_owned(),
         "-x".to_owned(),
-        geometry.left.to_string(),
+        "P".to_owned(),
         "-y".to_owned(),
-        geometry.top.to_string(),
+        // rmux treats a numeric -y as the popup's bottom edge. Its P
+        // shorthand resolves the target pane bottom and therefore positions
+        // a pane-height popup at the pane top, including a top status offset.
+        "P".to_owned(),
         "-w".to_owned(),
         geometry.width.to_string(),
         "-h".to_owned(),
