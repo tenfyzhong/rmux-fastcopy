@@ -42,6 +42,8 @@ zoom before selection. The pane ID keeps the overlay attached to the pane that
 invoked the binding, including in split windows.
 It uses rmux's pane-relative popup position so lower panes retain their vertical
 offset instead of being clamped to the top of the window.
+Rendering stops at the last visible row so a full-height capture cannot scroll
+the overlay upward when its trailing newline is painted.
 The outer `run-shell -C` is required for rmux 0.10 to expand that ID; the
 inner background command starts fastcopy without blocking key processing.
 `rmux-fastcopy` reads the target with `capture-pane` and never swaps, resizes,

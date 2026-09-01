@@ -306,6 +306,17 @@ struct Cell {
 
 fn render(stdout: &mut Stdout, text: &str, hints: &[Hint], state: &AppState) -> Result<()> {
     let (width, height) = size().context("read terminal size")?;
+    render_at_size(stdout, text, hints, state, width, height)
+}
+
+fn render_at_size<W: Write>(
+    stdout: &mut W,
+    text: &str,
+    hints: &[Hint],
+    state: &AppState,
+    width: u16,
+    height: u16,
+) -> Result<()> {
     let mut cells = text
         .char_indices()
         .map(|(byte_offset, ch)| Cell {
@@ -379,6 +390,9 @@ fn render(stdout: &mut Stdout, text: &str, hints: &[Hint], state: &AppState) -> 
             break;
         }
         if cell.ch == '\n' {
+            if y.saturating_add(1) >= height {
+                break;
+            }
             queue!(stdout, Print("\r\n"))?;
             x = 0;
             y = y.saturating_add(1);
@@ -441,5 +455,25 @@ fn style(style: CellStyle) -> (Color, bool) {
         CellStyle::Label => (Color::Red, true),
         CellStyle::LabelTyped => (Color::Yellow, true),
         CellStyle::DeselectLabel => (Color::DarkRed, true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_does_not_advance_past_the_last_visible_row() {
+        let hints = Vec::new();
+        let state = AppState::new(hints.clone());
+        let mut output = Vec::new();
+
+        render_at_size(&mut output, "first\nsecond\n", &hints, &state, 80, 2).unwrap();
+
+        assert_eq!(
+            output.windows(2).filter(|bytes| *bytes == b"\r\n").count(),
+            1,
+            "a newline after the bottom row scrolls the popup surface"
+        );
     }
 }
