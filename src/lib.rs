@@ -372,6 +372,66 @@ pub fn run_action(action: &str, selection: &Selection, pane: &str) -> Result<()>
     Ok(())
 }
 
+/// Absolute geometry of an rmux pane in its client window.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PaneGeometry {
+    pub left: u16,
+    pub top: u16,
+    pub width: u16,
+    pub height: u16,
+}
+
+/// Parse `pane_left pane_top pane_width pane_height` format output from rmux.
+pub fn parse_pane_geometry(output: &str) -> Result<PaneGeometry> {
+    let values = output
+        .split_whitespace()
+        .map(|value| value.parse::<u16>().context("parse pane geometry"))
+        .collect::<Result<Vec<_>>>()?;
+    let [left, top, width, height] = values.as_slice() else {
+        bail!("expected four pane geometry values, got {}", values.len());
+    };
+    if *width == 0 || *height == 0 {
+        bail!("pane geometry must have non-zero width and height");
+    }
+    Ok(PaneGeometry {
+        left: *left,
+        top: *top,
+        width: *width,
+        height: *height,
+    })
+}
+
+/// Build the rmux arguments for a borderless popup covering one pane.
+pub fn build_popup_args(
+    pane: &str,
+    client: Option<&str>,
+    current_path: &str,
+    geometry: PaneGeometry,
+) -> Vec<String> {
+    let mut args = vec!["display-popup".to_owned(), "-B".to_owned(), "-E".to_owned()];
+    if let Some(client) = client {
+        args.extend(["-c".to_owned(), client.to_owned()]);
+    }
+    args.extend([
+        "-t".to_owned(),
+        pane.to_owned(),
+        "-x".to_owned(),
+        "P".to_owned(),
+        "-y".to_owned(),
+        // rmux treats a numeric -y as the popup's bottom edge. Its P
+        // shorthand resolves the target pane bottom and therefore positions
+        // a pane-height popup at the pane top, including a top status offset.
+        "P".to_owned(),
+        "-w".to_owned(),
+        geometry.width.to_string(),
+        "-h".to_owned(),
+        geometry.height.to_string(),
+        "-d".to_owned(),
+        current_path.to_owned(),
+    ]);
+    args
+}
+
 /// Parse the output of `show-options -g` into `(name, value)` pairs.
 ///
 /// This mirrors how tmux-fastcopy reads `@fastcopy-*` options: tmux and rmux

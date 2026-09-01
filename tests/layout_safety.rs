@@ -22,28 +22,19 @@ fn selection_does_not_invoke_layout_mutating_rmux_commands() {
 }
 
 #[test]
-fn configured_popup_expands_target_pane_geometry_before_display() {
+fn configured_binding_delegates_popup_setup_to_fastcopy() {
     let readme = include_str!("../README.md");
     let binding = readme
         .lines()
         .find(|line| line.starts_with("bind f "))
         .expect("README must document the rmux key binding");
 
-    assert!(
-        binding.starts_with("bind f run-shell -C "),
-        "rmux 0.10 does not expand pane formats in display-popup sizes directly"
-    );
-    for argument in [
-        "-x #{pane_left}",
-        "-y #{pane_top}",
-        "-w #{pane_width}",
-        "-h #{pane_height}",
-    ] {
-        assert!(
-            binding.contains(argument),
-            "popup binding must include {argument}"
-        );
-    }
-    assert!(!binding.contains("-w 100%"));
-    assert!(!binding.contains("-h 100%"));
+    assert!(binding.starts_with("bind f run-shell -C \"run-shell -bE "));
+    assert!(binding.contains("rmux-fastcopy --pane #{pane_id}"));
+    assert!(!binding.contains("#{client_pid}"));
+    assert!(!binding.contains("display-popup"));
+    assert!(!binding.contains("#{pane_left}"));
+    assert!(!binding.contains("#{pane_top}"));
+    assert!(!binding.contains("#{pane_width}"));
+    assert!(!binding.contains("#{pane_height}"));
 }

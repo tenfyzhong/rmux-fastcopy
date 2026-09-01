@@ -29,17 +29,23 @@ make install
 Open the overlay with `prefix + f`:
 
 ```tmux
-bind f run-shell -C "display-popup -B -E -x #{pane_left} -y #{pane_top} -w #{pane_width} -h #{pane_height} -d '#{pane_current_path}' '$HOME/.cargo/bin/rmux-fastcopy --pane #{pane_id}'"
+bind f run-shell -C "run-shell -bE '$HOME/.cargo/bin/rmux-fastcopy --pane #{pane_id}'"
 ```
 
 The default action writes the selection to an rmux buffer. On macOS, pass
-`--action pbcopy` in the popup command to copy directly to the system
-clipboard instead.
+`--action pbcopy` in the binding, or set `@fastcopy-action` to `pbcopy`, to
+copy directly to the system clipboard instead.
 
-The popup is positioned over only the active pane, so the surrounding panes
-stay visible and the window does not appear to zoom before selection.
-`run-shell -C` expands the pane geometry before `display-popup` parses it,
-which is required by rmux 0.10.
+`rmux-fastcopy` reads the target pane geometry and opens a popup over only that
+pane, so the surrounding panes stay visible and the window does not appear to
+zoom before selection. The pane ID keeps the overlay attached to the pane that
+invoked the binding, including in split windows.
+It uses rmux's pane-relative popup position so lower panes retain their vertical
+offset instead of being clamped to the top of the window.
+Rendering stops at the last visible row so a full-height capture cannot scroll
+the overlay upward when its trailing newline is painted.
+The outer `run-shell -C` is required for rmux 0.10 to expand that ID; the
+inner background command starts fastcopy without blocking key processing.
 `rmux-fastcopy` reads the target with `capture-pane` and never swaps, resizes,
 splits, or otherwise changes windows, panes, or their layout.
 

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::{self, Stdout, Write};
 use std::process::Command;
 use std::time::Duration;
@@ -15,7 +16,8 @@ use crossterm::terminal::{
     enable_raw_mode, size,
 };
 use rmux_fastcopy::{
-    AppEvent, AppState, Hint, MatcherSet, Selection, generate_hints, parse_show_options, run_action,
+    AppEvent, AppState, Hint, MatcherSet, Selection, build_popup_args, generate_hints,
+    parse_pane_geometry, parse_show_options, run_action,
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -32,6 +34,10 @@ struct Args {
     /// Target rmux pane. The key binding passes #{pane_id} here.
     #[arg(long, env = "RMUX_FASTCOPY_PANE")]
     pane: String,
+
+    /// Attached rmux client that should display the popup.
+    #[arg(long, env = "RMUX_FASTCOPY_CLIENT")]
+    client: Option<String>,
 
     /// rmux executable to use for pane capture and the default action.
     #[arg(long, default_value = "rmux")]
@@ -56,6 +62,10 @@ struct Args {
     /// @fastcopy-regex-* option with the same name.
     #[arg(long = "regex", value_parser = parse_regex)]
     regexes: Vec<(String, String)>,
+
+    /// Run the selector inside the popup created by the parent process.
+    #[arg(long, hide = true)]
+    popup_child: bool,
 }
 
 fn parse_regex(value: &str) -> Result<(String, String), String> {
@@ -69,13 +79,18 @@ fn parse_regex(value: &str) -> Result<(String, String), String> {
 }
 
 fn main() {
-    if let Err(error) = run(Args::parse()) {
+    let original_args = std::env::args_os().collect::<Vec<_>>();
+    if let Err(error) = run(Args::parse_from(&original_args), &original_args) {
         eprintln!("rmux-fastcopy: {error:#}");
         std::process::exit(1);
     }
 }
 
-fn run(args: Args) -> Result<()> {
+fn run(args: Args, original_args: &[OsString]) -> Result<()> {
+    if !args.popup_child {
+        return open_popup(&args, original_args);
+    }
+
     let text = capture_pane(&args.rmux, &args.pane)?;
     let options = load_options(&args.rmux);
 
@@ -120,6 +135,44 @@ fn run(args: Args) -> Result<()> {
         run_action(&action, &selection, &args.pane)?;
     }
     Ok(())
+}
+
+fn open_popup(args: &Args, original_args: &[OsString]) -> Result<()> {
+    let geometry = capture_format(
+        &args.rmux,
+        &args.pane,
+        "#{pane_left} #{pane_top} #{pane_width} #{pane_height}",
+    )?;
+    let geometry = parse_pane_geometry(&geometry)?;
+    let current_path = capture_format(&args.rmux, &args.pane, "#{pane_current_path}")?;
+    let current_path = current_path.trim_end_matches(['\r', '\n']);
+    let popup_args = build_popup_args(&args.pane, args.client.as_deref(), current_path, geometry);
+    let executable = std::env::current_exe().context("locate rmux-fastcopy executable")?;
+    let status = Command::new(&args.rmux)
+        .args(popup_args)
+        .arg(executable)
+        .args(original_args.iter().skip(1))
+        .arg("--popup-child")
+        .status()
+        .with_context(|| format!("run {:?} display-popup", args.rmux))?;
+    if !status.success() {
+        bail!("display-popup exited with {status}");
+    }
+    Ok(())
+}
+
+fn capture_format(rmux: &str, pane: &str, format: &str) -> Result<String> {
+    let output = Command::new(rmux)
+        .args(["display-message", "-p", "-t", pane, format])
+        .output()
+        .with_context(|| format!("run {rmux:?} display-message"))?;
+    if !output.status.success() {
+        bail!(
+            "inspect pane {pane:?}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    String::from_utf8(output.stdout).context("pane format output is not UTF-8")
 }
 
 /// Load `@fastcopy-*` options from the rmux server, mirroring how
@@ -253,6 +306,17 @@ struct Cell {
 
 fn render(stdout: &mut Stdout, text: &str, hints: &[Hint], state: &AppState) -> Result<()> {
     let (width, height) = size().context("read terminal size")?;
+    render_at_size(stdout, text, hints, state, width, height)
+}
+
+fn render_at_size<W: Write>(
+    stdout: &mut W,
+    text: &str,
+    hints: &[Hint],
+    state: &AppState,
+    width: u16,
+    height: u16,
+) -> Result<()> {
     let mut cells = text
         .char_indices()
         .map(|(byte_offset, ch)| Cell {
@@ -326,6 +390,9 @@ fn render(stdout: &mut Stdout, text: &str, hints: &[Hint], state: &AppState) -> 
             break;
         }
         if cell.ch == '\n' {
+            if y.saturating_add(1) >= height {
+                break;
+            }
             queue!(stdout, Print("\r\n"))?;
             x = 0;
             y = y.saturating_add(1);
@@ -388,5 +455,25 @@ fn style(style: CellStyle) -> (Color, bool) {
         CellStyle::Label => (Color::Red, true),
         CellStyle::LabelTyped => (Color::Yellow, true),
         CellStyle::DeselectLabel => (Color::DarkRed, true),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_does_not_advance_past_the_last_visible_row() {
+        let hints = Vec::new();
+        let state = AppState::new(hints.clone());
+        let mut output = Vec::new();
+
+        render_at_size(&mut output, "first\nsecond\n", &hints, &state, 80, 2).unwrap();
+
+        assert_eq!(
+            output.windows(2).filter(|bytes| *bytes == b"\r\n").count(),
+            1,
+            "a newline after the bottom row scrolls the popup surface"
+        );
     }
 }
