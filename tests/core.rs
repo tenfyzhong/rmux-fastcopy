@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use pretty_assertions::assert_eq;
 use rmux_fastcopy::{
-    ActionInput, AppEvent, AppState, Match, MatcherSet, Selection, build_action, generate_hints,
-    parse_show_options,
+    ActionInput, AppEvent, AppState, Match, MatcherSet, PaneGeometry, Selection, build_action,
+    build_popup_args, generate_hints, parse_pane_geometry, parse_show_options,
 };
 
 #[test]
@@ -212,4 +212,55 @@ fn word_regex_selects_arbitrary_words() {
         .collect();
 
     assert_eq!(found, vec!["hello", "world", "foo.bar", "42"]);
+}
+
+#[test]
+fn pane_geometry_parses_rmux_format_output() {
+    assert_eq!(
+        parse_pane_geometry("113 23 112 34\n").unwrap(),
+        PaneGeometry {
+            left: 113,
+            top: 23,
+            width: 112,
+            height: 34,
+        }
+    );
+}
+
+#[test]
+fn popup_args_pin_geometry_pane_client_and_working_directory() {
+    let args = build_popup_args(
+        "%138",
+        Some("61012"),
+        "/tmp/project with spaces",
+        PaneGeometry {
+            left: 113,
+            top: 23,
+            width: 112,
+            height: 34,
+        },
+    );
+
+    assert_eq!(
+        args,
+        [
+            "display-popup",
+            "-B",
+            "-E",
+            "-c",
+            "61012",
+            "-t",
+            "%138",
+            "-x",
+            "113",
+            "-y",
+            "23",
+            "-w",
+            "112",
+            "-h",
+            "34",
+            "-d",
+            "/tmp/project with spaces",
+        ]
+    );
 }
