@@ -29,9 +29,9 @@ fn configured_binding_delegates_popup_setup_to_fastcopy() {
         .find(|line| line.starts_with("bind f "))
         .expect("README must document the rmux key binding");
 
-    assert!(binding.starts_with("bind f run-shell "));
-    assert!(binding.contains("rmux-fastcopy --pane '#{pane_id}'"));
-    assert!(binding.contains("--client '#{client_pid}'"));
+    assert!(binding.starts_with("bind f run-shell -C \"run-shell -bE "));
+    assert!(binding.contains("rmux-fastcopy --pane #{pane_id}"));
+    assert!(!binding.contains("#{client_pid}"));
     assert!(!binding.contains("display-popup"));
     assert!(!binding.contains("#{pane_left}"));
     assert!(!binding.contains("#{pane_top}"));

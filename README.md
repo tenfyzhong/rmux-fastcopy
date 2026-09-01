@@ -29,7 +29,7 @@ make install
 Open the overlay with `prefix + f`:
 
 ```tmux
-bind f run-shell "$HOME/.cargo/bin/rmux-fastcopy --pane '#{pane_id}' --client '#{client_pid}'"
+bind f run-shell -C "run-shell -bE '$HOME/.cargo/bin/rmux-fastcopy --pane #{pane_id}'"
 ```
 
 The default action writes the selection to an rmux buffer. On macOS, pass
@@ -38,8 +38,10 @@ copy directly to the system clipboard instead.
 
 `rmux-fastcopy` reads the target pane geometry and opens a popup over only that
 pane, so the surrounding panes stay visible and the window does not appear to
-zoom before selection. The pane and client IDs keep the overlay attached to
-the pane that invoked the binding, including in split windows.
+zoom before selection. The pane ID keeps the overlay attached to the pane that
+invoked the binding, including in split windows.
+The outer `run-shell -C` is required for rmux 0.10 to expand that ID; the
+inner background command starts fastcopy without blocking key processing.
 `rmux-fastcopy` reads the target with `capture-pane` and never swaps, resizes,
 splits, or otherwise changes windows, panes, or their layout.
 
